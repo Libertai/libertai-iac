@@ -18,33 +18,30 @@ function container-runtime {
 }
 
 function runtime-image-name {
-	local _RUNTIME_CID=$1
+	local _RUNTIME_ID=$1
 
-	if [ -z "$_RUNTIME_CID" ]; then
-		echo "Error runtime-image-name: No runtime CID provided"
-		exit 1
-	fi
-
-	echo "$_RUNTIME_CID-aleph-build-env"
+	echo "$_RUNTIME_ID-aleph-build-env"
 }
 
-# Pull a runtime by its CID from Aleph
-# Save to the specified directory
+# Pull a runtime from Aleph and keep it locally
+# $1: runtime ID
+# $2: runtime cid
+# $3: runtimes directory path
 function pull {
-	# CID of the squashed runtime on Aleph
-	local _RUNTIME_CID=$1
-	# Where to save all runtimes we pull
-	local _RUNTIMES_DIR_PATH=$2
+	local _RUNTIME_ID=$1
+	local _RUNTIME_CID=$2
+	local _RUNTIMES_DIR_PATH=$3
 
+	mkdir -p $_RUNTIMES_DIR_PATH
 	# What container runtime we're using
 	local CONTAINER_RUNTIME=$(container-runtime)
 	# What we'll call the container we import from the runtime
-	local RUNTIME_IMAGE_NAME=$(runtime-image-name $_RUNTIME_CID)
+	local RUNTIME_IMAGE_NAME=$(runtime-image-name $_RUNTIME_ID)
 	# Where we'll save the squashed runtime
-	local SQUASHED_RUNTIME_NAME="$_RUNTIME_CID-runtime.sqfs"
+	local SQUASHED_RUNTIME_NAME="$_RUNTIME_ID-runtime.sqfs"
 	local SQUASHED_RUNTIME_PATH="$_RUNTIMES_DIR_PATH/$SQUASHED_RUNTIME_NAME"
 	# Where we'll save the unsquashed runtime
-	local UNSQUASHED_RUNTIME_NAME="$_RUNTIME_CID-runtime"
+	local UNSQUASHED_RUNTIME_NAME="$_RUNTIME_ID-runtime"
 	local UNSQUASHED_RUNTIME_PATH="$_RUNTIMES_DIR_PATH/$UNSQUASHED_RUNTIME_NAME"
 
 	# First determine if we even need to pull the runtime
@@ -58,10 +55,16 @@ function pull {
 	# Check if maybe we haven't built the image, but still have the squashed runtime
 	# Kinda silly but we'll check anyway
 	if [ -d "$UNSQUASHED_RUNTIME_PATH" ]; then
-		echo "Runtime $_RUNTIME_CID already exists at $UNSQUASHED_RUNTIME_PATH"
+		echo "Runtime $_RUNTIME_ID already exists at $UNSQUASHED_RUNTIME_PATH"
 	else
-		echo "Pulling runtime $_RUNTIME_CID to $SQUASHED_RUNTIME_PATH ..."
+		echo "Pulling runtime $_RUNTIME_ID to $SQUASHED_RUNTIME_PATH ..."
+		# TODO: I should be using the aleph CLI for this. For now, i just know the CID
+		# RUNTIME_CID=$(aleph message get $_RUNTIME_ID | jq -r '.content.item_hash')
 		curl https://ipfs.aleph.cloud/ipfs/$_RUNTIME_CID -o $SQUASHED_RUNTIME_PATH
+		if [ $? -ne 0 ]; then
+			echo "Failed to pull runtime $_RUNTIME_ID"
+			exit 1
+		fi
 		echo "Unsquashing runtime $SQUASHED_RUNTIME_PATH to $UNSQUASHED_RUNTIME_PATH ..."
 		# TODO: janky but it works. Would like to just unsquash to the right directory
 		CURRENT_DIR=$(pwd)
@@ -80,7 +83,7 @@ function pull {
 	tar -C $UNSQUASHED_RUNTIME_PATH -c . | ${CONTAINER_RUNTIME} import - $RUNTIME_IMAGE_NAME
 
 	# TODO: debatable whether we should keep the unsquashed runtimes here
-	echo "Done pulling and importing runtime $_RUNTIME_CID"
+	echo "Done pulling and importing runtime $_RUNTIME_ID"
 }
 
 # Build an LLM engine using the specified runtime
@@ -97,10 +100,9 @@ function pull {
 #    ${LLM_ENGINE_BUILDS_DIR_PATH}/${RUNTIME_CID}/${LLM_ENGINE_REPO_NAME}
 function build-and-deploy-llm-engine {
 	local _RUNTIME_ID=$1
-	local _RUNTIME_CID=$2
-	local _MODEL_REPO=$3
-	local _MODEL_FILE=$4
-	local _MODEL_JSON_PATH=$5
+	local _MODEL_REPO=$2
+	local _MODEL_FILE=$3
+	local _MODEL_JSON_PATH=$4
 	local _LLM_ENGINE_BUILDS_DIR_PATH=$5
 	local _LLM_ENGINE_REPO_URL=$6
 	local _LLM_ENGINE_REPO_VERSION=$7
@@ -112,12 +114,12 @@ function build-and-deploy-llm-engine {
 
 	repo_name="${_LLM_ENGINE_REPO_URL##*/}"
 	local LLM_ENGINE_REPO_NAME="${repo_name%.*}"
-	local LLM_ENGINE_BUILD_PATH="$_LLM_ENGINE_BUILDS_DIR_PATH/$_RUNTIME_CID/$LLM_ENGINE_REPO_NAME"
+	local LLM_ENGINE_BUILD_PATH="$_LLM_ENGINE_BUILDS_DIR_PATH/$_RUNTIME_ID/$LLM_ENGINE_REPO_NAME"
 	local CONTAINER_RUNTIME=$(container-runtime)
-	local RUNTIME_IMAGE_NAME=$(runtime-image-name $_RUNTIME_CID)
+	local RUNTIME_IMAGE_NAME=$(runtime-image-name $_RUNTIME_ID)
 	local MODEL_NAME=${_MODEL_REPO}/$_MODEL_FILE}
 
-	echo "Building LLM engine $_LLM_ENGINE_REPO_URL using runtime $_RUNTIME_CID ..."
+	echo "Building LLM engine $_LLM_ENGINE_REPO_URL using runtime $_RUNTIME_ID ..."
 
 	# If the repo is not already cloned, clone it
 	if [ ! -d "$LLM_ENGINE_BUILD_PATH/llm-engine" ]; then
