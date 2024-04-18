@@ -50,7 +50,7 @@ function push {
 	local MODEL_PATH=${MODEL_DIR_PATH}/${_MODEL_FILE}
 
 	set +e
-	jq -e ".\"${MODEL_NAME}\"" models.json
+	jq -e ".\"${MODEL_NAME}\"" ${_MODELS_JSON_PATH}
 	if [ $? -eq 0 ]; then
 		echo "Model already pushed"
 		return
@@ -66,6 +66,7 @@ function push {
 
 	# Push the model and remove the local squashed model
 	local MODEL_SQFS_CID=$(curl -X POST -F "file=@${MODEL_PATH}.sqfs" https://ipfs.aleph.cloud/api/v0/add | jq -r .Hash)
+	# local MODEL_SQFS_CID=$(curl -X POST -F "file=@README.md" https://ipfs.aleph.cloud/api/v0/add | jq -r .Hash)
 	rm ${MODEL_PATH}.sqfs
 	echo "Model sqfs pushed to IPFS with CID: ${MODEL_SQFS_CID}"
 
@@ -73,10 +74,9 @@ function push {
 
 	echo "Model sqfs stored in message with CID: ${MODEL_SQFS_STORE_CID}"
 
-	# Record the cid of the model
-	jq ".\"${MODEL_NAME}\" .sqfs_cid=${MODEL_SQFS_CID}" models.json >models.json.tmp
-	jq ".\"${MODEL_NAME}\".sqfs_item_hash=${MODEL_SQFS_ITEM_HASH}" models.json.tmp >models.json
-	mv models.json.tmp models.json
+	# Record the cid of the model# Record the cid of the model
+	jq --arg cid "$MODEL_SQFS_CID" --arg hash "$MODEL_SQFS_ITEM_HASH" '.["'"$MODEL_NAME"'"] += {"sqfs_cid": $cid, "sqfs_item_hash": $hash}' ${_MODELS_JSON_PATH} >${_MODELS_JSON_PATH}.tmp
+	mv ${_MODELS_JSON_PATH}.tmp ${_MODELS_JSON_PATH}
 }
 
 $@
