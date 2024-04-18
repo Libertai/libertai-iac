@@ -117,9 +117,28 @@ function build-and-deploy-llm-engine {
 	local LLM_ENGINE_BUILD_PATH="$_LLM_ENGINE_BUILDS_DIR_PATH/$_RUNTIME_ID/$LLM_ENGINE_REPO_NAME"
 	local CONTAINER_RUNTIME=$(container-runtime)
 	local RUNTIME_IMAGE_NAME=$(runtime-image-name $_RUNTIME_ID)
-	local MODEL_NAME=${_MODEL_REPO}/$_MODEL_FILE}
+	local MODEL_NAME=${_MODEL_REPO}/${_MODEL_FILE}
 
-	echo "Building LLM engine $_LLM_ENGINE_REPO_URL using runtime $_RUNTIME_ID ..."
+	# Get the item hash of the model by its name
+	set +e
+	echo "Getting model item hash from $_MODEL_JSON_PATH at $MODEL_NAME ..."
+	MODEL_ITEM_HASH=$(jq ".[\"$MODEL_NAME\"].sqfs_item_hash" $_MODEL_JSON_PATH)
+	set -e
+	# Check if the model item hash is empty or 'null'
+	if [ "$MODEL_ITEM_HASH" == "null" ]; then
+		echo "Error: Model item hash was null"
+		exit 1
+	fi
+	if [ -z "$MODEL_ITEM_HASH" ]; then
+		echo "Error: Model item hash not found"
+		exit 1
+	fi
+
+	# Strip leading and trailing quotes from the model item hash
+	MODEL_ITEM_HASH=$(echo $MODEL_ITEM_HASH | sed 's/^"\(.*\)"$/\1/')
+
+	echo "Building LLM engine $LLM_ENGINE_REPO_NAME using runtime $_RUNTIME_ID ..."
+	echo "Will attach volume with model item hash: $MODEL_ITEM_HASH"
 
 	# If the repo is not already cloned, clone it
 	if [ ! -d "$LLM_ENGINE_BUILD_PATH/llm-engine" ]; then
@@ -156,15 +175,6 @@ function build-and-deploy-llm-engine {
 	echo "#!/bin/bash" >$LLM_ENGINE_BUILD_PATH/llm-engine/entrypoint.sh
 	echo "$_LLM_ENGINE_RUN_COMMAND /models/$_MODEL_FILE" >>$LLM_ENGINE_BUILD_PATH/llm-engine/entrypoint.sh
 	chmod u+x $LLM_ENGINE_BUILD_PATH/llm-engine/entrypoint.sh
-
-	# Get the item hash of the model by its name
-	set +e
-	MODEL_ITEM_HASH=jq ".\"${MODEL_NAME}\".sqfs_item_hash" $_MODEL_JSON_PATH
-	set -e
-	if [ -z "$MODEL_ITEM_HASH" ]; then
-		echo "Error: Model item hash not found"
-		exit 1
-	fi
 
 	# TODO: better configuration for vcpu and ram
 	aleph program upload $LLM_ENGINE_BUILD_PATH/llm-engine entrypoint.sh \

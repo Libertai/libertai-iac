@@ -24,12 +24,13 @@ function push-engine {
 	./bin/runtime.sh build-and-deploy-llm-engine \
 		$RUNTIME_ID \
 		$MODEL_REPO \
-		$MODELS_FILE \
+		$MODEL_FILE \
 		models.json \
 		$LLM_ENGINE_BUILDS_DIR_PATH \
 		$LLM_ENGINE_REPO_URL \
 		$LLM_ENGINE_REPO_VERSION \
-		"$LLM_ENGINE_BUILD_COMMAND"
+		"$LLM_ENGINE_BUILD_COMMAND" \
+		"$LLM_ENGINE_RUN_COMMAND"
 }
 
 $1
