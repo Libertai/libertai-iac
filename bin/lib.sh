@@ -20,6 +20,10 @@ function pull-runtime {
 }
 
 function push-engine {
+	# TODO: for some reason, passing the build and run commands
+	#  is not working -- they get interpreted as split commands in the shell.
+	#   For now this function just sources the engine build and run commands itself.
+	#    This is not as clean as it could be, but it works for now.
 	# Build our engine within our runtime
 	./bin/runtime.sh build-and-deploy-llm-engine \
 		$RUNTIME_ID \
@@ -28,9 +32,7 @@ function push-engine {
 		models.json \
 		$LLM_ENGINE_BUILDS_DIR_PATH \
 		$LLM_ENGINE_REPO_URL \
-		$LLM_ENGINE_REPO_VERSION \
-		"$LLM_ENGINE_BUILD_COMMAND" \
-		"$LLM_ENGINE_RUN_COMMAND"
+		$LLM_ENGINE_REPO_VERSION
 }
 
 $1

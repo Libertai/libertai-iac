@@ -98,7 +98,8 @@ function pull {
 # - Saves the resulting binary to the specified directory. It should be named
 #   according to the repo name and the runtime CID:
 #    ${LLM_ENGINE_BUILDS_DIR_PATH}/${RUNTIME_CID}/${LLM_ENGINE_REPO_NAME}
-function build-and-deploy-llm-engine {
+function build-and-deploy-llm-engine() {
+	source .env
 	local _RUNTIME_ID=$1
 	local _MODEL_REPO=$2
 	local _MODEL_FILE=$3
@@ -106,8 +107,8 @@ function build-and-deploy-llm-engine {
 	local _LLM_ENGINE_BUILDS_DIR_PATH=$5
 	local _LLM_ENGINE_REPO_URL=$6
 	local _LLM_ENGINE_REPO_VERSION=$7
-	local _LLM_ENGINE_BUILD_COMMAND=$8
-	local _LLM_ENGINE_RUN_COMMAND=$9
+	local _LLM_ENGINE_BUILD_COMMAND=$LLM_ENGINE_BUILD_COMMAND
+	local _LLM_ENGINE_RUN_COMMAND=$LLM_ENGINE_RUN_COMMAND
 
 	# TODO: I should probably also name this according to repo version
 	#  but for now this is fine
@@ -141,19 +142,19 @@ function build-and-deploy-llm-engine {
 	echo "Will attach volume with model item hash: $MODEL_ITEM_HASH"
 
 	# If the repo is not already cloned, clone it
-	if [ ! -d "$LLM_ENGINE_BUILD_PATH/llm-engine" ]; then
-		git clone $_LLM_ENGINE_REPO_URL $LLM_ENGINE_BUILD_PATH/llm-engine
+	if [ ! -d "$LLM_ENGINE_BUILD_PATH" ]; then
+		git clone $_LLM_ENGINE_REPO_URL $LLM_ENGINE_BUILD_PATH
 	fi
 	# Pull the LLM engine repo
 	CURRENT_DIR=$(pwd)
-	cd $LLM_ENGINE_BUILD_PATH/llm-engine
+	cd $LLM_ENGINE_BUILD_PATH
 	git checkout $_LLM_ENGINE_REPO_VERSION
 	cd $CURRENT_DIR
 
 	# Write out a build script to the repo
 	echo "#!/bin/bash" >$LLM_ENGINE_BUILD_PATH/build.sh
-	echo "apt update && apt install build-essential -y" >>$LLM_ENGINE_BUILD_PATH/build.sh
-	echo "cd /opt/llm-engine" >>$LLM_ENGINE_BUILD_PATH/build.sh
+	echo "apt update && apt install git build-essential -y" >>$LLM_ENGINE_BUILD_PATH/build.sh
+	echo "cd /opt" >>$LLM_ENGINE_BUILD_PATH/build.sh
 	echo "$_LLM_ENGINE_BUILD_COMMAND" >>$LLM_ENGINE_BUILD_PATH/build.sh
 	chmod u+x $LLM_ENGINE_BUILD_PATH/build.sh
 
@@ -166,18 +167,18 @@ function build-and-deploy-llm-engine {
 	# Kinda janky, but we know llama cpp has extra files we don't need
 	#  We should probably just know where the binary we need is, and copy it
 	#   but this works for now
-	rm -rf $LLM_ENGINE_BUILD_PATH/llm-engine/models
+	rm -rf $LLM_ENGINE_BUILD_PATH/models
 
 	echo "Deploying llm engine on aleph ..."
 
 	# Write out a run script to the repo
 	# TODO: This is a bit janky, but it works for now
-	echo "#!/bin/bash" >$LLM_ENGINE_BUILD_PATH/llm-engine/entrypoint.sh
-	echo "$_LLM_ENGINE_RUN_COMMAND /models/$_MODEL_FILE" >>$LLM_ENGINE_BUILD_PATH/llm-engine/entrypoint.sh
-	chmod u+x $LLM_ENGINE_BUILD_PATH/llm-engine/entrypoint.sh
+	echo "#!/bin/bash" >$LLM_ENGINE_BUILD_PATH/entrypoint.sh
+	echo "$_LLM_ENGINE_RUN_COMMAND /models/$_MODEL_FILE" >>$LLM_ENGINE_BUILD_PATH/entrypoint.sh
+	chmod u+x $LLM_ENGINE_BUILD_PATH/entrypoint.sh
 
 	# TODO: better configuration for vcpu and ram
-	aleph program upload $LLM_ENGINE_BUILD_PATH/llm-engine entrypoint.sh \
+	aleph program upload $LLM_ENGINE_BUILD_PATH entrypoint.sh \
 		--runtime=$_RUNTIME_ID --memory=8192 --vcpus=8 --timeout-seconds=300 \
 		--immutable-volume ref=$MODEL_ITEM_HASH,use_latest=true,mount=/models
 
